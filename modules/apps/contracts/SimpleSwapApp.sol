@@ -18,15 +18,15 @@ contract SimpleSwapApp is CounterfactualApp {
   using SafeMath for uint256;
 
   struct AppState {
-    // TODO how do we get context into asset type here?
-    LibOutcome.CoinTransfer asset1Transfers[] // [sender, receiver]
-    LibOutcome.CoinTransfer asset2Transfers[] // [sender, receiver]
+    LibOutcome.CoinTransfer[] coinTransfers // [AliceCoin1, BobCoin1, AliceCoin2, BobCoin2]
     bool finalized
   }
 
   struct SwapAction {
-    uint256 turnTakerTransferAmount
+    uint256 swapAmount
     uint256 swapRate
+    address initiatorCoinAddress
+    address initiatorAccount
     bool finalize
   }
 
@@ -50,8 +50,7 @@ contract SimpleSwapApp is CounterfactualApp {
     returns (bytes memory)
   {
     AppState memory state = abi.decode(encodedState, (AppState));
-    // TODO return both transfer arrays?
-    // return abi.encode(state.transfers);
+    return abi.encode(state.coinTransfers);
   }
 
   function applyAction(
@@ -67,8 +66,10 @@ contract SimpleSwapApp is CounterfactualApp {
     // apply transition based on action
     AppState memory postState = applySwap(
       state,
-      action.turnTakerTransferAmount,
+      action.swapAmount,
       action.swapRate,
+      action.initiatorCoinAddress,
+      action.initiatorAccount
       action.finalize
     );
     return abi.encode(postState);
@@ -93,16 +94,17 @@ contract SimpleSwapApp is CounterfactualApp {
 
   function applySwap(
     AppState memory state,
-    uint256 turnTakerTransferAmount,
+    uint256 swapAmount,
     uint256 swapRate,
+    address initiatorCoinAddress,
+    address initiatorAccount,
     bool finalize
   )
     internal
     pure
     returns (AppState memory)
   {
-    // This seems wrong - we are labeling these as transfers but they behave like balances
-    // We should EITHER be keeping track of balances OR initial state + sum of all transfers
+    //Need to find a good way to modify two different coinTransfer objects in lockstep
 
     // transfer asset1
     state.asset1Transfers[0].amount = state.asset1Transfers[0].amount.sub(turnTakerTransferAmount);
