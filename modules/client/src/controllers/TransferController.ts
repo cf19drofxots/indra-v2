@@ -1,7 +1,7 @@
 import { AppRegistry, convert, NodeChannel, TransferParameters } from "@connext/types";
 import { RejectInstallVirtualMessage } from "@counterfactual/node";
 import { AppInstanceInfo, Node as NodeTypes } from "@counterfactual/types";
-import { constants, Wallet } from "ethers";
+import { constants } from "ethers";
 import { BigNumber } from "ethers/utils";
 
 import { delay } from "../lib/utils";
@@ -11,6 +11,7 @@ import { falsy, notLessThanOrEqualTo } from "../validation/bn";
 import { AbstractController } from "./AbstractController";
 import { AddressZero, Zero } from "ethers/constants";
 import { fromExtendedKey } from "ethers/utils/hdnode";
+import { ConnextInternal } from "src";
 
 export class TransferController extends AbstractController {
   private appId: string;
@@ -18,9 +19,9 @@ export class TransferController extends AbstractController {
 
   private timeout: NodeJS.Timeout;
 
-  public transfer = async (params: TransferParameters, wallet: Wallet): Promise<NodeChannel> => {
+  public transfer = async (params: TransferParameters): Promise<NodeChannel> => {
     this.log.info(`Transfer called with parameters: ${JSON.stringify(params, null, 2)}`);
-    this.myPublicIdentifier = wallet.address
+    this.myPublicIdentifier = ConnextInternal.publicIdentifier;
 
     // convert params + validate
     const { recipient, amount, assetId } = convert.TransferParameters("bignumber", params);
