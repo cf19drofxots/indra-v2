@@ -9,6 +9,7 @@ import {
   SupportedApplication,
   TransferAction,
   TransferParameters,
+  ConditionalTransferParameters,
   WithdrawParameters,
 } from "@connext/types";
 import { jsonRpcDeserialize, MNEMONIC_PATH, Node } from "@counterfactual/node";
@@ -21,6 +22,7 @@ import { Client as NatsClient, Payload } from "ts-nats";
 import { DepositController } from "./controllers/DepositController";
 import { ExchangeController } from "./controllers/ExchangeController";
 import { TransferController } from "./controllers/TransferController";
+import { ConditionalTransferController } from "./controllers/ConditionalTransferController";
 import { WithdrawalController } from "./controllers/WithdrawalController";
 import { Logger } from "./lib/logger";
 import { logEthFreeBalance } from "./lib/utils";
@@ -163,6 +165,10 @@ export abstract class ConnextChannel {
     return await this.internal.transfer(params);
   };
 
+  public conditionalTransfer = async (params: ConditionalTransferParameters): Promise <NodeChannel> => {
+    return await this.internal.conditionalTransfer(params);
+  }
+
   public withdraw = async (params: WithdrawParameters): Promise<ChannelState> => {
     return await this.internal.withdraw(params);
   };
@@ -241,6 +247,7 @@ export class ConnextInternal extends ConnextChannel {
   // Setup channel controllers
   private depositController: DepositController;
   private transferController: TransferController;
+  private conditionalTransferController: ConditionalTransferController;
   private exchangeController: ExchangeController;
   private withdrawalController: WithdrawalController;
 
@@ -269,6 +276,7 @@ export class ConnextInternal extends ConnextChannel {
     // instantiate controllers with logger and cf
     this.depositController = new DepositController("DepositController", this);
     this.transferController = new TransferController("TransferController", this);
+    this.conditionalTransferController = new ConditionalTransferController("ConditionalTransferController", this)
     this.exchangeController = new ExchangeController("ExchangeController", this);
     this.withdrawalController = new WithdrawalController("WithdrawalController", this);
   }
@@ -287,6 +295,10 @@ export class ConnextInternal extends ConnextChannel {
   public transfer = async (params: TransferParameters): Promise<NodeChannel> => {
     return await this.transferController.transfer(params);
   };
+
+  public conditionalTransfer = async (params: ConditionalTransferParameters): Promise<NodeChannel> => {
+    return await this.conditionalTransferController.conditionalTransfer(params)
+  }
 
   public withdraw = async (params: WithdrawParameters): Promise<ChannelState> => {
     return await this.withdrawalController.withdraw(params);
@@ -411,35 +423,9 @@ export class ConnextInternal extends ConnextChannel {
   };
 
   public proposeInstallVirtualApp = async (
-    appName: SupportedApplication,
-    initialDeposit: BigNumber,
-    counterpartyPublicIdentifier: string,
+    params: NodeTypes.ProposeInstallVirtualParams
   ): Promise<NodeTypes.ProposeInstallVirtualResult> => {
-    const { initialStateFinalized, ...paramInfo } = AppRegistry[this.network.name][appName];
-    if (!paramInfo) {
-      throw new Error("App not found in registry for provided network");
-    }
-    const params: NodeTypes.ProposeInstallVirtualParams = {
-      ...paramInfo,
-      // TODO: best way to pass in an initial state?
-      initialState: {
-        finalized: initialStateFinalized,
-        transfers: [
-          {
-            amount: initialDeposit,
-            to: this.wallet.address,
-            // TODO: replace? fromExtendedKey(this.publicIdentifier).derivePath("0").address
-          },
-          {
-            amount: Zero,
-            to: fromExtendedKey(counterpartyPublicIdentifier).derivePath("0").address,
-          },
-        ],
-      },
-      intermediaries: [this.nodePublicIdentifier],
-      myDeposit: initialDeposit,
-      proposedToIdentifier: counterpartyPublicIdentifier,
-    };
+    params.intermediaries = [this.nodePublicIdentifier]
 
     const actionRes = await this.cfModule.router.dispatch(
       jsonRpcDeserialize({
