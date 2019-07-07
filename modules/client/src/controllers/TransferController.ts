@@ -1,7 +1,7 @@
 import { AppRegistry, convert, NodeChannel, TransferParameters } from "@connext/types";
 import { RejectInstallVirtualMessage } from "@counterfactual/node";
 import { AppInstanceInfo, Node as NodeTypes } from "@counterfactual/types";
-import { constants } from "ethers";
+import { constants, Wallet } from "ethers";
 import { BigNumber } from "ethers/utils";
 
 import { delay } from "../lib/utils";
@@ -9,14 +9,18 @@ import { invalidAddress, invalidXpub } from "../validation/addresses";
 import { falsy, notLessThanOrEqualTo } from "../validation/bn";
 
 import { AbstractController } from "./AbstractController";
+import { AddressZero, Zero } from "ethers/constants";
+import { fromExtendedKey } from "ethers/utils/hdnode";
 
 export class TransferController extends AbstractController {
   private appId: string;
+  private myPublicIdentifier: string;
 
   private timeout: NodeJS.Timeout;
 
-  public transfer = async (params: TransferParameters): Promise<NodeChannel> => {
+  public transfer = async (params: TransferParameters, wallet: Wallet): Promise<NodeChannel> => {
     this.log.info(`Transfer called with parameters: ${JSON.stringify(params, null, 2)}`);
+    this.myPublicIdentifier = wallet.address
 
     // convert params + validate
     const { recipient, amount, assetId } = convert.TransferParameters("bignumber", params);
@@ -30,8 +34,7 @@ export class TransferController extends AbstractController {
       this.cfModule.ethFreeBalanceAddress
     ];
 
-    // TODO: check if the recipient is the node, and if so transfer without
-    // installing an app (is this possible?)
+    // TODO: check if the recipient is the node, and if so install instead of installVirtual
 
     // get app definition from constants
     // TODO: this should come from a db on the node
@@ -46,7 +49,7 @@ export class TransferController extends AbstractController {
 
     // install the transfer application
     try {
-      await this.transferAppInstalled(amount, recipient);
+      await this.transferAppInstalled(amount, recipient, appInfo);
     } catch (e) {
       // TODO: can add more checks in `rejectInstall` but there is no
       // way to check if the recipient is collateralized atm, so just
@@ -128,15 +131,31 @@ export class TransferController extends AbstractController {
 
   // creates a promise that is resolved once the app is installed
   // and rejected if the virtual application is rejected
-  private transferAppInstalled = async (amount: BigNumber, recipient: string): Promise<any> => {
+  private transferAppInstalled = async (amount: BigNumber, recipient: string, appInfo: any): Promise<any> => {
     let boundResolve;
     let boundReject;
 
-    const res = await this.connext.proposeInstallVirtualApp(
-      "EthUnidirectionalTransferApp",
-      amount,
-      recipient, // must be xpub
-    );
+    const params: NodeTypes.ProposeInstallVirtualParams = {
+      ...appInfo,
+      initialState: {
+        transfers: [
+          {
+            amount,
+            to: this.myPublicIdentifier,
+            // TODO: replace? fromExtendedKey(this.publicIdentifier).derivePath("0").address
+          },
+          {
+            amount: Zero,
+            to: fromExtendedKey(recipient).derivePath("0").address,
+          },
+        ],
+      },
+      intermediaries: [AddressZero],
+      myDeposit: amount,
+      proposedToIdentifier: recipient,
+    };
+
+    const res = await this.connext.proposeInstallVirtualApp(params);
     // set app instance id
     this.appId = res.appInstanceId;
 
