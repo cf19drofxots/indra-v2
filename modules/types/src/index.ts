@@ -68,7 +68,7 @@ export const AppRegistry: IAppRegistry = {
       asset: { assetType: 0 },
       initialStateFinalized: false,
       outcomeType: OutcomeType.TWO_PARTY_DYNAMIC_OUTCOME,
-      peerDeposit: constants.Zero, // TODO: include this?
+      peerDeposit: constants.Zero, // TODO: include this? @layne no, it's always zero for unidirectional - Arjun
       timeout: constants.Zero,
     },
   },
@@ -266,6 +266,12 @@ export type TransferParameters<T = string> = DepositParameters<T> & {
 };
 export type TransferParametersBigNumber = TransferParameters<BigNumber>;
 
+////// ConditionalTransfer types
+export type ConditionalTransferParameters<T = string> = TransferParameters<T> & {
+  type: string;
+  options?: any;
+}
+
 ////// Exchange types
 // TODO: would we ever want to pay people in the same app with multiple currencies?
 export interface ExchangeParameters<T = string> {
@@ -405,6 +411,23 @@ export function convertTransferParametersToAsset<To extends NumericTypeName>(
   };
 }
 
+//TODO: Is there any way to convert numbers in obj.options to BNs here?
+export function convertConditionalTransferParametersToAsset<To extends NumericTypeName>(
+  to: To,
+  obj: ConditionalTransferParameters<any>,
+): ConditionalTransferParameters<NumericTypes[To]> {
+  const asset: any = {
+    ...obj,
+  };
+  if (!asset.assetId) {
+    asset.assetId = constants.AddressZero;
+  }
+  return {
+    ...asset,
+    ...convertAssetAmount(to, asset),
+  };
+}
+
 export function convertWithdrawParametersToAsset<To extends NumericTypeName>(
   to: To,
   obj: WithdrawParameters<any>,
@@ -436,5 +459,6 @@ export const convert: any = {
   Multisig: convertMultisig,
   Transfer: convertAssetAmount,
   TransferParameters: convertTransferParametersToAsset,
+  ConditionalTransferParameters: convertConditionalTransferParametersToAsset,
   Withdraw: convertWithdrawParametersToAsset,
 };
