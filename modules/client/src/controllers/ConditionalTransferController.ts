@@ -13,13 +13,11 @@ import { ConnextInternal } from "src";
 
 export class ConditionalTransferController extends AbstractController {
   private appId: string;
-  private myPublicIdentifier: string;
 
   private timeout: NodeJS.Timeout;
 
   public conditionalTransfer = async (params: ConditionalTransferParameters): Promise<NodeChannel> => {
     this.log.info(`ConditionalTransfer called with parameters: ${JSON.stringify(params)}`);
-    this.myPublicIdentifier = ConnextInternal.publicIdentifier;
 
     // convert params + validate
     const { recipient, amount, assetId, type, options } = convert.ConditionalTransferParameters("bignumber", params);

@@ -15,13 +15,11 @@ import { ConnextInternal } from "src";
 
 export class TransferController extends AbstractController {
   private appId: string;
-  private myPublicIdentifier: string;
 
   private timeout: NodeJS.Timeout;
 
   public transfer = async (params: TransferParameters): Promise<NodeChannel> => {
     this.log.info(`Transfer called with parameters: ${JSON.stringify(params, null, 2)}`);
-    this.myPublicIdentifier = ConnextInternal.publicIdentifier;
 
     // convert params + validate
     const { recipient, amount, assetId } = convert.TransferParameters("bignumber", params);
@@ -142,8 +140,7 @@ export class TransferController extends AbstractController {
         transfers: [
           {
             amount,
-            to: this.myPublicIdentifier,
-            // TODO: replace? fromExtendedKey(this.publicIdentifier).derivePath("0").address
+            to: fromExtendedKey(this.connext.publicIdentifier).derivePath("0").address
           },
           {
             amount: Zero,
@@ -151,7 +148,7 @@ export class TransferController extends AbstractController {
           },
         ],
       },
-      intermediaries: [AddressZero],
+      intermediaries: [this.connext.nodePublicIdentifier],
       myDeposit: amount,
       proposedToIdentifier: recipient,
     };
