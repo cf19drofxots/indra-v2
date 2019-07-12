@@ -74,17 +74,26 @@ export async function connect(opts: ClientOptions): Promise<ConnextInternal> {
   const config = await node.config();
   console.log(`node eth network: ${JSON.stringify(config.ethNetwork)}`);
 
-  // create new cfModule to inject into internal instance
-  console.log("creating new cf module");
-  const cfModule = await Node.create(
-    messaging,
-    opts.store,
-    {
-      STORE_KEY_PREFIX: "store",
-    }, // TODO: proper config
-    wallet.provider,
-    config.contractAddresses,
-  );
+  let cfModule, channelProvider;
+
+  if(opts.mnemonic) {
+    // create new cfModule to inject into internal instance
+    console.log("creating new cf module");
+    cfModule = await Node.create(
+      messaging,
+      opts.store,
+      {
+        STORE_KEY_PREFIX: "store",
+      }, // TODO: proper config
+      wallet.provider,
+      config.contractAddresses,
+    );
+  } else if (opts.channelProvider){
+    // else use provider
+    channelProvider = opts.channelProvider;
+  } else {
+    throw new Error("You must pass in either a mnemonic or channel provider")
+  }
   node.setPublicIdentifier(cfModule.publicIdentifier);
   console.log("created cf module successfully");
 
@@ -104,6 +113,7 @@ export async function connect(opts: ClientOptions): Promise<ConnextInternal> {
   // create the new client
   return new ConnextInternal({
     cfModule,
+    channelProvider,
     listener,
     multisigAddress: myChannel.multisigAddress,
     nats: messaging.getConnection(),
@@ -220,6 +230,7 @@ export abstract class ConnextChannel {
 export class ConnextInternal extends ConnextChannel {
   public opts: InternalClientOptions;
   public cfModule: Node;
+  public channelProvider: any;
   public publicIdentifier: string;
   public wallet: Wallet;
   public node: NodeApiClient;
@@ -329,47 +340,63 @@ export class ConnextInternal extends ConnextChannel {
       this.logger.error(err);
       throw new Error(err);
     }
+    let depositResponse;
 
-    const depositResponse = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.DEPOSIT,
-        params: {
-          amount,
-          multisigAddress: this.opts.multisigAddress,
-          notifyCounterparty,
-        },
-      }),
-    );
+    if(this.channelProvider){
+      depositResponse = await this.channelProvider(amount, notifyCounterparty)
+    } else {
+      depositResponse = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.DEPOSIT,
+          params: {
+            amount,
+            multisigAddress: this.opts.multisigAddress,
+            notifyCounterparty,
+          },
+        }),
+      );
+    }
     // @ts-ignore --> WHYY?
     return depositResponse as NodeTypes.DepositResult;
   };
 
   // TODO: under what conditions will this fail?
   public getAppInstances = async (): Promise<AppInstanceInfo[]> => {
-    const appInstanceResponse = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.GET_APP_INSTANCES,
-        params: {} as NodeTypes.GetAppInstancesParams,
-      }),
-    );
+    let appInstanceResponse;
 
+    if(this.channelProvider){
+      appInstanceResponse = await this.channelProvider.getAppInstances();
+    } else {
+      appInstanceResponse = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.GET_APP_INSTANCES,
+          params: {} as NodeTypes.GetAppInstancesParams,
+        }),
+      );
+    }
     return appInstanceResponse.result.appInstances as AppInstanceInfo[];
   };
 
   // TODO: under what conditions will this fail?
   public getFreeBalance = async (): Promise<NodeTypes.GetFreeBalanceStateResult> => {
-    const freeBalance = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.GET_FREE_BALANCE_STATE,
-        params: { multisigAddress: this.multisigAddress },
-      }),
-    );
+    let freeBalance;
+
+    if (this.channelProvider) {
+      freeBalance = await this.channelProvider.getFreeBalance();
+    } else {
+      freeBalance = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.GET_FREE_BALANCE_STATE,
+          params: { multisigAddress: this.multisigAddress },
+        }),
+      );
+    }
 
     return freeBalance.result as NodeTypes.GetFreeBalanceStateResult;
   };
@@ -382,16 +409,22 @@ export class ConnextInternal extends ConnextChannel {
       this.logger.warn(err);
       return undefined;
     }
-    const appInstanceResponse = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.GET_APP_INSTANCE_DETAILS,
-        params: {
-          appInstanceId,
-        } as NodeTypes.GetAppInstanceDetailsParams,
-      }),
-    );
+    let appInstanceResponse;
+    
+    if (this.channelProvider) {
+      appInstanceResponse = await this.channelProvider.getAppInstanceDetails();
+    } else {
+       appInstanceResponse = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.GET_APP_INSTANCE_DETAILS,
+          params: {
+            appInstanceId,
+          } as NodeTypes.GetAppInstanceDetailsParams,
+        }),
+      );
+    }
 
     return appInstanceResponse.result as NodeTypes.GetAppInstanceDetailsResult;
   };
@@ -405,16 +438,22 @@ export class ConnextInternal extends ConnextChannel {
       this.logger.warn(err);
       return undefined;
     }
-    const stateResponse = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.GET_STATE,
-        params: {
-          appInstanceId,
-        } as NodeTypes.GetStateParams,
-      }),
-    );
+    let stateResponse;
+
+    if(this.channelProvider) {
+      stateResponse = await this.channelProvider.getAppState();
+    } else {
+      stateResponse = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.GET_STATE,
+          params: {
+            appInstanceId,
+          } as NodeTypes.GetStateParams,
+        }),
+      );
+    }
 
     return stateResponse.result as NodeTypes.GetStateResult;
   };
@@ -435,17 +474,23 @@ export class ConnextInternal extends ConnextChannel {
     if ((state.state as any).finalized) {
       throw new Error("Cannot take action on an app with a finalized state.");
     }
-    const actionResponse = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.TAKE_ACTION,
-        params: {
-          action,
-          appInstanceId,
-        } as NodeTypes.TakeActionParams,
-      }),
-    );
+    let actionResponse;
+
+    if(this.channelProvider) {
+      actionResponse = await this.channelProvider.takeAction(appInstanceId, action);
+    } else {
+      actionResponse = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.TAKE_ACTION,
+          params: {
+            action,
+            appInstanceId,
+          } as NodeTypes.TakeActionParams,
+        }),
+      );
+    }
 
     return actionResponse.result as NodeTypes.TakeActionResult;
   };
@@ -482,16 +527,22 @@ export class ConnextInternal extends ConnextChannel {
       proposedToIdentifier: counterpartyPublicIdentifier,
     };
 
-    const actionRes = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.PROPOSE_INSTALL_VIRTUAL,
-        params,
-      }),
-    );
+    let actionResponse;
 
-    return actionRes.result as NodeTypes.ProposeInstallVirtualResult;
+    if(this.channelProvider) {
+      actionResponse = await this.channelProvider.proposeInstallVirtualApp(appName, initialDeposit, counterpartyPublicIdentifier);
+    } else {
+      actionResponse = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.PROPOSE_INSTALL_VIRTUAL,
+          params,
+        }),
+      );
+    }
+
+    return actionResponse.result as NodeTypes.ProposeInstallVirtualResult;
   };
 
   public installVirtualApp = async (
@@ -507,17 +558,23 @@ export class ConnextInternal extends ConnextChannel {
           `Installed apps: ${JSON.stringify(apps, null, 2)}`,
       );
     }
-    const installVirtualResponse = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.INSTALL_VIRTUAL,
-        params: {
-          appInstanceId,
-          intermediaries: [this.nodePublicIdentifier],
-        } as NodeTypes.InstallVirtualParams,
-      }),
-    );
+    let installVirtualResponse;
+
+    if (this.channelProvider) {
+      installVirtualResponse = await this.channelProvider.installVirtualApp(appInstanceId);
+    } else {
+      installVirtualResponse = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.INSTALL_VIRTUAL,
+          params: {
+            appInstanceId,
+            intermediaries: [this.nodePublicIdentifier],
+          } as NodeTypes.InstallVirtualParams,
+        }),
+      );
+    }
 
     return installVirtualResponse.result;
   };
@@ -531,17 +588,23 @@ export class ConnextInternal extends ConnextChannel {
       this.logger.error(err);
       throw new Error(err);
     }
-    const uninstallResponse = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.UNINSTALL_VIRTUAL,
-        params: {
-          appInstanceId,
-          intermediaryIdentifier: this.nodePublicIdentifier,
-        },
-      }),
-    );
+    let uninstallResponse;
+
+    if(this.channelProvider) {
+      uninstallResponse = await this.channelProvider.uninstallVirtualApp(appInstanceId);
+    } else {
+      uninstallResponse = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.UNINSTALL_VIRTUAL,
+          params: {
+            appInstanceId,
+            intermediaryIdentifier: this.nodePublicIdentifier,
+          },
+        }),
+      );
+    }
 
     return uninstallResponse.result as NodeTypes.UninstallVirtualResult;
   };
@@ -561,18 +624,24 @@ export class ConnextInternal extends ConnextChannel {
       this.logger.error(err);
       throw new Error(err);
     }
-    const withdrawalResponse = await this.cfModule.router.dispatch(
-      jsonRpcDeserialize({
-        id: Date.now(),
-        jsonrpc: "2.0",
-        method: NodeTypes.RpcMethodName.WITHDRAW,
-        params: {
-          amount,
-          multisigAddress: this.multisigAddress,
-          recipient,
-        },
-      }),
-    );
+    let withdrawalResponse;
+
+    if (this.channelProvider) {
+      withdrawalResponse = await this.channelProvider.withdrawal(amount, recipient)
+    } else {
+      withdrawalResponse = await this.cfModule.router.dispatch(
+        jsonRpcDeserialize({
+          id: Date.now(),
+          jsonrpc: "2.0",
+          method: NodeTypes.RpcMethodName.WITHDRAW,
+          params: {
+            amount,
+            multisigAddress: this.multisigAddress,
+            recipient,
+          },
+        }),
+      );
+    }
 
     return withdrawalResponse.result;
   };
