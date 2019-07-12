@@ -85,22 +85,22 @@ export class Wallet extends Signer {
 
   // FIXME: remove?
   public async sendTransaction(txReq: TransactionRequest): Promise<TransactionResponse> {
-    if (this.external) {
-      return this.signAndSendTransactionExternally(txReq);
-    }
+    // if (this.external) {
+    //   return this.signAndSendTransactionExternally(txReq);
+    // }
     return this.signer.sendTransaction(txReq);
   }
 
-  // FIXME: remove?
-  public async signTransaction(tx: TransactionRequest): Promise<string> {
-    return this.signer.sign(tx);
-  }
+  // // FIXME: remove?
+  // public async signTransaction(tx: TransactionRequest): Promise<string> {
+  //   return this.signer.sign(tx);
+  // }
 
   // FIXME: remove?
-  private async signAndSendTransactionExternally(tx: TransactionRequest): Promise<any> {
-    const txObj: any = await this.prepareTransaction(tx);
-    return this.signer.sign(txObj);
-  }
+  // private async signAndSendTransactionExternally(tx: TransactionRequest): Promise<any> {
+  //   const txObj: any = await this.prepareTransaction(tx);
+  //   return this.signer.sign(txObj);
+  // }
 
   // FIXME: remove?
   private async prepareTransaction(tx: TransactionRequest): Promise<any> {
