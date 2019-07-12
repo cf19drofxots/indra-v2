@@ -1,8 +1,9 @@
-import { providers, Signer, utils, Wallet as EthersWallet } from "ethers";
+import { providers, Signer, utils, Wallet as EthersWallet, ethers } from "ethers";
 
 import { Logger } from "./lib/logger";
 import { objMapPromise } from "./lib/utils";
 import { ClientOptions } from "./types";
+import { Web3Provider, JsonRpcSigner } from "ethers/providers";
 
 type TransactionRequest = providers.TransactionRequest;
 type TransactionResponse = providers.TransactionResponse;
@@ -19,8 +20,9 @@ const toUtf8Bytes = utils.toUtf8Bytes;
 // and CF handles signing? should this class include the keygen fn ref somehow
 export class Wallet extends Signer {
   public provider: JsonRpcProviderType;
-  private signer: EthersWallet;
+  private signer: EthersWallet | JsonRpcSigner;
   public address: string;
+  public web3: Web3Provider;
   private external: boolean = false;
   public log: Logger;
 
@@ -36,6 +38,8 @@ export class Wallet extends Signer {
     if (opts.rpcProviderUrl) {
       // preferentially use provided rpc url
       this.provider = new JsonRpcProvider(opts.rpcProviderUrl);
+    } else if (opts.web3Provider){
+      this.provider = new ethers.providers.Web3Provider(opts.web3Provider)
     } else {
       // access hubs eth url
       // TODO: http or https? is this the right default URL?
@@ -61,6 +65,8 @@ export class Wallet extends Signer {
       this.signer = opts.externalWallet;
       this.external = true;
       this.address = opts.externalWallet.address.toLowerCase();
+    } else if(opts.web3Provider) {
+      this.signer = this.provider.getSigner(0)
     } else {
       throw new Error(`Wallet needs to be given a signer!`);
     }
