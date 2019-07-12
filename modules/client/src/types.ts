@@ -8,6 +8,8 @@ import { Client as NatsClient } from "ts-nats";
 import { ConnextListener } from "./listener";
 import { NodeApiClient } from "./node";
 import { Wallet } from "./wallet";
+import { any } from "prop-types";
+import { Web3Provider } from "ethers/providers";
 
 export type BigNumber = utils.BigNumber;
 export const BigNumber = utils.BigNumber;
@@ -27,6 +29,7 @@ export interface ClientOptions {
 
   // channel provider
   channelProvider?: ChannelProvider;
+  web3Provider?: Web3Provider;
 
   // function passed in by wallets to generate ephemeral keys
   // used when signing applications
@@ -60,7 +63,8 @@ export type InternalClientOptions = ClientOptions & {
   // store: ConnextStore; --> whats this look like
   contract?: MultisigState;
   // counterfactual node
-  cfModule: Node;
+  cfModule?: Node;
+  channelProvider?: any;
   multisigAddress: string;
   nodePublicIdentifier: string;
   network: utils.Network; // TODO: delete! use bos branch!
