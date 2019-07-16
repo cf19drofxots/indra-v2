@@ -1,0 +1,22 @@
+[
+  {
+    "contractName": "HighRollerApp",
+    "address": "0x144F1A5C2db59B58f2c73d09A2acb27a57E47618",
+    "transactionHash": "0xbc846c2975903128678ee562003f1d46b2c090e48ae618dbb0f74aa0e1e0f4d4"
+  },
+  {
+    "contractName": "NimApp",
+    "address": "0x4D1FeB96EcE430A783F5a17755670cfDcA8b72f5",
+    "transactionHash": "0xae985ed5ca48ae49858b19a432916d5f56d4eee9b1bc890d3361791e12e78c75"
+  },
+  {
+    "contractName": "TicTacToeApp",
+    "address": "0x62507485DD6811293b1CE709BdB3EdAFC98972a6",
+    "transactionHash": "0x37dc4549c8a521ff6a0bdf062216ec352cc95d6bf0fe5d34e2be6c952ec4d7e7"
+  },
+  {
+    "contractName": "ETHUnidirectionalTransferApp",
+    "address": "0x1E81Cd1D76b1594683d3D75972a437F41cBbC01C",
+    "transactionHash": "0xe626c1a68526b3cdc150f2a9f6f5949a837d10cda4f8cfb4867162623e457b20"
+  }
+]
