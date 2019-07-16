@@ -4,9 +4,9 @@ pragma experimental "ABIEncoderV2";
 import "@counterfactual/contracts/contracts/interfaces/CounterfactualApp.sol";
 import "@counterfactual/contracts/contracts/libs/LibOutcome.sol";
 import "@counterfactual/contracts/contracts/interfaces/Interpreter.sol";
-import "@counterfactual/contracts/contracts/interpreters/SwapInterpreter.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 
+import "./SwapInterpreter.sol";
 
 /// @title SimpleTwoPartySwapApp
 /// @notice This contract lets two parties swap one ERC20 or ETH asset for another

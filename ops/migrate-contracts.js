@@ -3,7 +3,7 @@ const eth = require('ethers')
 const linker = require('solc/linker')
 const tokenArtifacts = require('openzeppelin-solidity/build/contracts/ERC20Mintable.json')
 
-const contracts = [
+const coreContracts = [
   "ChallengeRegistry",
   "CoinBalanceRefundApp",
   "CoinTransferETHInterpreter",
@@ -16,9 +16,17 @@ const contracts = [
   "TwoPartyFixedOutcomeFromVirtualAppETHInterpreter",
 ]
 
+const appContracts = [
+  "EthUnidirectionalTransferApp",
+  "SimpleTwoPartySwapApp",
+]
+
 const artifacts = {}
-for (const contract of contracts) {
+for (const contract of coreContracts) {
   artifacts[contract] = require(`@counterfactual/contracts/build/${contract}.json`)
+}
+for (const contract of appContracts) {
+  artifacts[contract] = require(`@connext/apps/build/${contract}.json`)
 }
 
 const { EtherSymbol, Zero } = eth.constants
@@ -58,7 +66,7 @@ const getSavedData = (contractName, property) => {
   }
 }
 
-// Write addressBook to disk if anything has changed
+// Write addressBook to disk
 const saveAddressBook = (addressBook) => {
   try {
     fs.unlinkSync(addressBookPath)
@@ -82,8 +90,13 @@ const contractIsDeployed = async (address) => {
   return true
 }
 
-// Deploy contract & write resulting addressBook to our address-book file
 const deployContract = async (name, artifacts, args) => {
+  console.log(`\nChecking for valid ${name} contract...`)
+  const savedAddress = getSavedData(name, 'address')
+  if (await contractIsDeployed(savedAddress)) {
+    console.log(`${name} is up to date, no action required\nAddress: ${savedAddress}`)
+    return savedAddress
+  }
   const factory = eth.ContractFactory.fromSolidity(artifacts)
   const contract = await factory.connect(wallet).deploy(...args.map(a=>a.value))
   const txHash = contract.deployTransaction.hash
@@ -101,17 +114,7 @@ const deployContract = async (name, artifacts, args) => {
   return contract
 }
 
-const maybeDeployContract = async (name, artifacts, args) => {
-  console.log(`\nChecking for valid ${name} contract...`)
-  const savedAddress = getSavedData(name, 'address')
-  if (await contractIsDeployed(savedAddress)) {
-    console.log(`${name} is up to date, no action required\nAddress: ${savedAddress}`)
-    return savedAddress
-  }
-  return deployContract(name, artifacts, args)
-}
-
-const maybeSendGift = async (address, token) => {
+const sendGift = async (address, token) => {
   const ethGift = '3'
   const tokenGift = '1000'
   const ethBalance = await wallet.provider.getBalance(address)
@@ -190,23 +193,27 @@ const maybeSendGift = async (address, token) => {
   ////////////////////////////////////////
   // Deploy contracts
 
-  for (const contract of contracts) {
-    await maybeDeployContract(contract, artifacts[contract], [])
+  for (const contract of coreContracts) {
+    await deployContract(contract, artifacts[contract], [])
+  }
+
+  for (const contract of appContracts) {
+    await deployContract(contract, artifacts[contract], [])
   }
 
   // If on testnet, deploy a token contract too
   if (chainId === ganacheId) {
-    token = await maybeDeployContract('DolphinCoin', tokenArtifacts, [])
+    token = await deployContract('DolphinCoin', tokenArtifacts, [])
   }
 
   ////////////////////////////////////////
   // On testnet, give relevant accounts a healthy starting balance
 
   if (chainId === ganacheId) {
-    await maybeSendGift(eth.Wallet.fromMnemonic(mnemonic, cfPath).address, token)
+    await sendGift(eth.Wallet.fromMnemonic(mnemonic, cfPath).address, token)
     for (const botMnemonic of botMnemonics) {
-      await maybeSendGift(eth.Wallet.fromMnemonic(botMnemonic).address, token)
-      await maybeSendGift(eth.Wallet.fromMnemonic(botMnemonic, cfPath).address, token)
+      await sendGift(eth.Wallet.fromMnemonic(botMnemonic).address, token)
+      await sendGift(eth.Wallet.fromMnemonic(botMnemonic, cfPath).address, token)
     }
   }
 
@@ -216,7 +223,7 @@ const maybeSendGift = async (address, token) => {
   console.log(`\nUpdating addresses for other networks..`)
   for (const chainId of ["3", "4", "42"]) {
     const artifacts = require(`@counterfactual/contracts/networks/${chainId}.json`)
-    for (const contract of contracts) {
+    for (const contract of coreContracts) {
       const artifact = artifacts.filter(c => c.contractName === contract)[0]
       if (!artifact || !artifact.address) {
         console.log(`Contract ${contract} not found in network ${chainId}`);

@@ -3,7 +3,7 @@ const request = require('request');
 require("dotenv").config();
 
 var waffleConfig = {
-  "npmPath": "../../node_modules",
+  "npmPath": "node_modules",
   "legacyOutput": true,
   "compilerOptions": {
     "evmVersion": "constantinople"
